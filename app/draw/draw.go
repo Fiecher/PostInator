@@ -16,17 +16,13 @@ const (
 	bgPath      = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\BG.png"
 	fontPath    = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Buran USSR.ttf"
 	overlayPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Overlay.png"
-	outputPath  = "output.png"
+	outputPath  = "photos/output.png"
 )
 
 func main() {
 	const (
-		bgPath      = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\BG.png"
-		fontPath    = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Buran USSR.ttf"
-		imgPath     = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test4.jpg"
-		overlayPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Overlay.png"
-		outputPath  = "output.png"
-		text        = "main.go"
+		imgPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test4.jpg"
+		text    = "main.go"
 	)
 
 	background := openImage(bgPath)
@@ -118,10 +114,27 @@ func drawOverlay(context *gg.Context, path string) image.Image {
 	baseRGBA := image.NewRGBA(baseImg.Bounds())
 	draw.Draw(baseRGBA, baseRGBA.Bounds(), baseImg, image.Point{}, draw.Over)
 
+	overlayRGBA := image.NewRGBA(overlay.Bounds())
+	for y := 0; y < overlay.Bounds().Dy(); y++ {
+		for x := 0; x < overlay.Bounds().Dx(); x++ {
+			originalColor := overlay.At(x, y)
+			r, g, b, a := originalColor.RGBA()
+			alpha := uint16(float64(a) * 0.6)
+
+			overlayRGBA.Set(x, y, color.NRGBA{
+				R: uint8(r >> 8),
+				G: uint8(g >> 8),
+				B: uint8(b >> 8),
+				A: uint8(alpha >> 8),
+			})
+		}
+	}
+
 	centerX := (baseRGBA.Bounds().Dx() - overlay.Bounds().Dx()) / 2
 	centerY := (baseRGBA.Bounds().Dy() - overlay.Bounds().Dy()) / 2
 	offset := image.Pt(centerX, centerY)
-	draw.Draw(baseRGBA, overlay.Bounds().Add(offset), overlay, image.Point{}, draw.Over)
+
+	draw.Draw(baseRGBA, overlay.Bounds().Add(offset), overlayRGBA, image.Point{}, draw.Over)
 
 	return baseRGBA
 }
@@ -167,4 +180,33 @@ func checkError(msg string, err error) bool {
 		return true
 	}
 	return false
+}
+
+func ResizeImage(inputPath string, maxSize uint) (string, error) {
+	file, err := os.Open(inputPath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	img, _, err := image.Decode(file)
+	if err != nil {
+		return "", err
+	}
+
+	resizedImg := resize.Resize(maxSize, 0, img, resize.Lanczos3)
+
+	outputPath := inputPath + "_resized.png"
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return "", err
+	}
+	defer outFile.Close()
+
+	err = png.Encode(outFile, resizedImg)
+	if err != nil {
+		return "", err
+	}
+
+	return outputPath, nil
 }

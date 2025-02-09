@@ -1,107 +1,57 @@
 package main
 
 import (
+	"PostInator/botutil"
 	"PostInator/draw"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/mymmrac/telego"
 )
 
 func main() {
-	botToken := os.Getenv("TOKEN")
+	token := os.Getenv("TOKEN")
+	botObj := botutil.Initialization(token)
 
-	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger())
-	if err != nil {
-		fmt.Println("Bot initialization:", err)
-		os.Exit(1)
-	}
+	updates, _ := botObj.UpdatesViaLongPolling(nil)
+	defer botObj.StopLongPolling()
 
-	updates, _ := bot.UpdatesViaLongPolling(nil)
-	defer bot.StopLongPolling()
+	photoSent := make(map[int64]bool)
 
 	for update := range updates {
 		if update.Message != nil && (len(update.Message.Photo) > 0 || update.Message.Document != nil) {
 			chatID := update.Message.Chat.ID
-			var fileID string
 
-			if update.Message.Photo != nil {
-				fileID = update.Message.Photo[len(update.Message.Photo)-1].FileID
-			} else if update.Message.Document != nil {
-				fileID = update.Message.Document.FileID
-			}
-
-			file, err := bot.GetFile(&telego.GetFileParams{FileID: fileID})
-			if err != nil {
-				sendError(bot, chatID, "Getting files from Telegram: "+err.Error())
+			if photoSent[chatID] {
 				continue
 			}
 
-			localPath := filepath.Join("downloads", filepath.Base(file.FilePath))
-			out, err := downloadFile(fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", botToken, file.FilePath), localPath)
-			if err != nil {
-				sendError(bot, chatID, "Downloading file: "+err.Error())
-				continue
+			out := botutil.DownloadFile(update, botObj, token)
+
+			text := botutil.GetText(update)
+
+			render := draw.Render(out.Name(), text)
+
+			if botutil.SendFile(update, botObj, render) {
+				photoSent[chatID] = true
 			}
 
-			_, err = bot.SendMessage(&telego.SendMessageParams{
-				ChatID: telego.ChatID{ID: chatID},
-				Text:   "The file has been successfully downloaded.",
-			})
-			if err != nil {
-				fmt.Println("Sending message:", err)
-			}
-
-			render := draw.Render(out.Name(), "test")
-
-			// Открываем сгенерированный файл
-			fileToSend, err := os.Open(render)
-			if err != nil {
-				sendError(bot, chatID, "Error opening file: "+err.Error())
-				continue
-			}
-			defer fileToSend.Close()
-
-			// Отправляем файл
-			_, err = bot.SendDocument(&telego.SendDocumentParams{
-				ChatID:   telego.ChatID{ID: chatID},
-				Document: telego.InputFile{File: fileToSend},
-				Caption:  "Here is your processed file.",
-			})
-			if err != nil {
-				sendError(bot, chatID, "Error sending file: "+err.Error())
-			}
+			clearPhotos()
 		}
 	}
 }
 
-func sendError(bot *telego.Bot, chatID int64, message string) {
-	fmt.Println("Error:", message)
-	_, err := bot.SendMessage(&telego.SendMessageParams{
-		ChatID: telego.ChatID{ID: chatID},
-		Text:   "⚠️ " + message,
-	})
+func clearPhotos() {
+	photosDir := "photos"
+	files, err := os.ReadDir(photosDir)
 	if err != nil {
-		fmt.Println("Sending error:", err)
+		fmt.Println("Error reading photos directory:", err)
+		return
 	}
-}
 
-func downloadFile(url, filepath string) (*os.File, error) {
-	out, err := os.Create(filepath)
-	if err != nil {
-		return out, err
+	for _, file := range files {
+		err := os.Remove(filepath.Join(photosDir, file.Name()))
+		if err != nil {
+			fmt.Println("Error deleting file:", file.Name(), err)
+		}
 	}
-	defer out.Close()
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return out, err
-	}
-	defer resp.Body.Close()
-
-	_, err = io.Copy(out, resp.Body)
-	return out, err
 }
