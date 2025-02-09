@@ -24,11 +24,6 @@ go.work.sum
 # env file
 .env
 
-<<<<<<< HEAD
-# vscode
-.vscode/launch.json
-=======
 # PostInator
-.vscode/launch.json
+.vscode/
 resources/
->>>>>>> cd3a1ec39bc5b44ee79ac4067ff034df2d7c60ff
