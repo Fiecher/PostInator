@@ -12,19 +12,16 @@ import (
 )
 
 func Initialization(token string) *telego.Bot {
-
 	bot, err := telego.NewBot(token, telego.WithDefaultDebugLogger())
-	if err != nil {
-		fmt.Println("Bot initialization:", err)
+	if checkError("Bot initialization", err) {
 		os.Exit(1)
 	}
-
 	return bot
 }
 
 func GetFile(update telego.Update, bot *telego.Bot) *telego.File {
 	message := update.Message
-	chatID := update.Message.Chat.ID
+	chatID := message.Chat.ID
 
 	var fileID string
 	if message.Photo != nil {
@@ -34,7 +31,7 @@ func GetFile(update telego.Update, bot *telego.Bot) *telego.File {
 	}
 
 	file, err := bot.GetFile(&telego.GetFileParams{FileID: fileID})
-	if err != nil {
+	if checkError("Getting files from Telegram", err) {
 		sendError(bot, chatID, "Getting files from Telegram: "+err.Error())
 	}
 
@@ -46,8 +43,8 @@ func DownloadFile(update telego.Update, bot *telego.Bot, token string) *os.File 
 	chatID := update.Message.Chat.ID
 
 	localPath := filepath.Join("temp", filepath.Base(file.FilePath))
-	out, err := downloadFile(fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, file.FilePath), localPath)
-	if err != nil {
+	out, err := fetchFile(fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, file.FilePath), localPath)
+	if checkError("Downloading file", err) {
 		sendError(bot, chatID, "Downloading file: "+err.Error())
 	}
 
@@ -60,67 +57,62 @@ func DownloadFile(update telego.Update, bot *telego.Bot, token string) *os.File 
 }
 
 func GetText(update telego.Update) string {
-	text := ""
 	if update.Message.Caption != "" {
-		text = update.Message.Caption
-	} else if update.Message.Text != "" {
-		text = update.Message.Text
+		return update.Message.Caption
 	}
-	return text
+	return update.Message.Text
 }
 
 func SendFile(update telego.Update, bot *telego.Bot, file string) bool {
 	defer clearPhotos()
-
 	chatID := update.Message.Chat.ID
 
 	resizedPath, err := draw.ResizeImage(file, 2048)
-	if err != nil {
+	if checkError("Resizing image", err) {
 		sendError(bot, chatID, "Resizing image: "+err.Error())
 	}
 
 	fileInfo, err := os.Stat(resizedPath)
-	if err != nil {
+	if checkError("Getting file size", err) {
 		sendError(bot, chatID, "Getting file size: "+err.Error())
 	}
 
 	fileToSend, err := os.Open(resizedPath)
-	if err != nil {
+	if checkError("Opening file", err) {
 		sendError(bot, chatID, "Opening file: "+err.Error())
 	}
-
 	defer fileToSend.Close()
 
+	var sendErr error
 	if fileInfo.Size() <= 10*1024*1024 {
-		_, err = bot.SendPhoto(&telego.SendPhotoParams{
+		_, sendErr = bot.SendPhoto(&telego.SendPhotoParams{
 			ChatID: telego.ChatID{ID: chatID},
 			Photo:  telego.InputFile{File: fileToSend},
 		})
 	} else {
-		_, err = bot.SendDocument(&telego.SendDocumentParams{
+		_, sendErr = bot.SendDocument(&telego.SendDocumentParams{
 			ChatID:   telego.ChatID{ID: chatID},
 			Document: telego.InputFile{File: fileToSend},
 		})
 	}
 
-	if err != nil {
-		sendError(bot, chatID, "Error sending image: "+err.Error())
+	if checkError("Error sending image", sendErr) {
+		sendError(bot, chatID, "Error sending image: "+sendErr.Error())
 		return false
 	}
 	return true
-
 }
 
-func downloadFile(url, filepath string) (*os.File, error) {
+func fetchFile(url, filepath string) (*os.File, error) {
 	out, err := os.Create(filepath)
-	if err != nil {
-		return out, err
+	if checkError("Creating file", err) {
+		return nil, err
 	}
 	defer out.Close()
 
 	resp, err := http.Get(url)
-	if err != nil {
-		return out, err
+	if checkError("Downloading file", err) {
+		return nil, err
 	}
 	defer resp.Body.Close()
 
@@ -131,15 +123,13 @@ func downloadFile(url, filepath string) (*os.File, error) {
 func clearPhotos() {
 	tempDir := "temp"
 	files, err := os.ReadDir(tempDir)
-	if err != nil {
-		fmt.Println("Error! Reading photos directory:", err)
+	if checkError("Reading photos directory", err) {
 		return
 	}
 
 	for _, file := range files {
-		err := os.Remove(filepath.Join(tempDir, file.Name()))
-		if err != nil {
-			fmt.Println("Error! Deleting file:", file.Name(), err)
+		if checkError("Deleting file", os.Remove(filepath.Join(tempDir, file.Name()))) {
+			fmt.Println("Error! Deleting file:", file.Name())
 		}
 	}
 }
@@ -150,7 +140,13 @@ func sendError(bot *telego.Bot, chatID int64, message string) {
 		ChatID: telego.ChatID{ID: chatID},
 		Text:   "⚠️ " + message,
 	})
+	checkError("Sending error", err)
+}
+
+func checkError(msg string, err error) bool {
 	if err != nil {
-		fmt.Println("Error! Sending error:", err)
+		fmt.Println(msg+":", err)
+		return true
 	}
+	return false
 }
