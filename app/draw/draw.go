@@ -16,12 +16,12 @@ const (
 	bgPath      = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\BG.png"
 	fontPath    = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Buran USSR.ttf"
 	overlayPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Overlay.png"
-	outputPath  = "photos/output.png"
+	outputPath  = "temp/output.png"
 )
 
 func main() {
 	const (
-		imgPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test4.jpg"
+		imgPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test.jpg"
 		text    = "main.go"
 	)
 

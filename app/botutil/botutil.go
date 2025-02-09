@@ -45,7 +45,7 @@ func DownloadFile(update telego.Update, bot *telego.Bot, token string) *os.File 
 	file := GetFile(update, bot)
 	chatID := update.Message.Chat.ID
 
-	localPath := filepath.Join("photos", filepath.Base(file.FilePath))
+	localPath := filepath.Join("temp", filepath.Base(file.FilePath))
 	out, err := downloadFile(fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, file.FilePath), localPath)
 	if err != nil {
 		sendError(bot, chatID, "Downloading file: "+err.Error())
