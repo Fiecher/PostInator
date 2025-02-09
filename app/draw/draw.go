@@ -13,49 +13,31 @@ import (
 	"github.com/nfnt/resize"
 )
 
-var bgPath, fontPath, overlayPath, outputPath string
-
-func main() {
-	loadDirectories()
-	const (
-		imgPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test.jpg"
-		text    = "main.go"
-	)
-
-	background := openImage(bgPath)
-	if background == nil {
-		return
-	}
-
-	dc := gg.NewContextForImage(background)
-	drawText(dc, text, fontPath)
-	destImg := drawImg(dc, imgPath)
-	dc = gg.NewContextForImage(destImg)
-	destImg = drawOverlay(dc, overlayPath)
-
-	saveImage(outputPath, destImg)
-}
+var (
+	bgPath, fontPath, overlayPath, outputPath string
+)
 
 func Render(imgPath, text string) string {
 	loadDirectories()
 	background := openImage(bgPath)
 	if background == nil {
-		fmt.Println("Ошибка загрузки фона")
 		return ""
 	}
 
 	dc := gg.NewContextForImage(background)
 	drawText(dc, text, fontPath)
 	destImg := drawImg(dc, imgPath)
-	dc = gg.NewContextForImage(destImg)
-	destImg = drawOverlay(dc, overlayPath)
+	destImg = drawOverlay(destImg, overlayPath)
 
 	return saveImage(outputPath, destImg)
-
 }
 
 func loadDirectories() {
-	rootDir, _ := os.Getwd()
+	rootDir, err := os.Getwd()
+	if checkError("Getting working directory", err) {
+		return
+	}
+
 	outputPath = filepath.Join(rootDir, "temp", "output.png")
 	rootDir = filepath.Dir(rootDir)
 	bgPath = filepath.Join(rootDir, "resources", "BG.png")
@@ -65,13 +47,13 @@ func loadDirectories() {
 
 func openImage(path string) image.Image {
 	file, err := os.Open(path)
-	if checkError("Open file:", err) {
+	if checkError("Opening file", err) {
 		return nil
 	}
 	defer file.Close()
 
 	img, _, err := image.Decode(file)
-	if checkError("Decoding:", err) {
+	if checkError("Decoding image", err) {
 		return nil
 	}
 	return img
@@ -79,40 +61,38 @@ func openImage(path string) image.Image {
 
 func saveImage(path string, img image.Image) string {
 	file, err := os.Create(path)
-	checkError("Creating file:", err)
-
+	if checkError("Creating file", err) {
+		return ""
+	}
 	defer file.Close()
 
 	err = png.Encode(file, img)
-	checkError("Saving image:", err)
-
+	if checkError("Saving image", err) {
+		return ""
+	}
 	return path
 }
 
 func drawImg(context *gg.Context, path string) image.Image {
-	width, height := context.Width(), context.Height()
 	img := openImage(path)
 	if img == nil {
 		return context.Image()
 	}
 
 	img = cropToSquare(img)
-	targetSize := width * 6 / 10
+	targetSize := context.Width() * 6 / 10
 	img = resize.Resize(uint(targetSize), uint(targetSize), img, resize.Lanczos3)
 
-	centerX := (width - img.Bounds().Dx()) / 2
-	centerY := (height - img.Bounds().Dy()) / 2
-
+	centerX := (context.Width() - img.Bounds().Dx()) / 2
+	centerY := (context.Height() - img.Bounds().Dy()) / 2
 	destImg := image.NewRGBA(context.Image().Bounds())
 	draw.Draw(destImg, destImg.Bounds(), context.Image(), image.Point{}, draw.Over)
-	offset := image.Pt(centerX, centerY)
-	draw.Draw(destImg, img.Bounds().Add(offset), img, image.Point{}, draw.Over)
+	draw.Draw(destImg, img.Bounds().Add(image.Pt(centerX, centerY)), img, image.Point{}, draw.Over)
 
 	return destImg
 }
 
-func drawOverlay(context *gg.Context, path string) image.Image {
-	baseImg := context.Image()
+func drawOverlay(baseImg image.Image, path string) image.Image {
 	overlay := openImage(path)
 	if overlay == nil {
 		return baseImg
@@ -139,22 +119,18 @@ func drawOverlay(context *gg.Context, path string) image.Image {
 
 	centerX := (baseRGBA.Bounds().Dx() - overlay.Bounds().Dx()) / 2
 	centerY := (baseRGBA.Bounds().Dy() - overlay.Bounds().Dy()) / 2
-	offset := image.Pt(centerX, centerY)
-
-	draw.Draw(baseRGBA, overlay.Bounds().Add(offset), overlayRGBA, image.Point{}, draw.Over)
+	draw.Draw(baseRGBA, overlay.Bounds().Add(image.Pt(centerX, centerY)), overlayRGBA, image.Point{}, draw.Over)
 
 	return baseRGBA
 }
 
 func drawText(context *gg.Context, text, fontPath string) {
-	width, height := context.Width(), context.Height()
-
-	if err := context.LoadFontFace(fontPath, fontSize(width, height)); checkError("Loading font:", err) {
+	if err := context.LoadFontFace(fontPath, fontSize(context.Width(), context.Height())); checkError("Loading font", err) {
 		return
 	}
 
 	context.SetColor(color.RGBA{33, 35, 50, 255})
-	context.DrawStringAnchored(text, float64(width)/2, float64(height)*0.86, 0.5, 0.5)
+	context.DrawStringAnchored(text, float64(context.Width())/2, float64(context.Height())*0.86, 0.5, 0.5)
 }
 
 func fontSize(width, height int) float64 {
@@ -167,13 +143,11 @@ func cropToSquare(img image.Image) image.Image {
 		return img
 	}
 
-	var cropRect image.Rectangle
+	cropRect := image.Rect(0, 0, width, height)
 	if width > height {
-		cropX := (width - height) / 2
-		cropRect = image.Rect(cropX, 0, cropX+height, height)
+		cropRect = image.Rect((width-height)/2, 0, (width+height)/2, height)
 	} else {
-		cropY := (height - width) / 2
-		cropRect = image.Rect(0, cropY, width, cropY+width)
+		cropRect = image.Rect(0, (height-width)/2, width, (height+width)/2)
 	}
 
 	rgbaImg := image.NewRGBA(img.Bounds())
@@ -191,27 +165,26 @@ func checkError(msg string, err error) bool {
 
 func ResizeImage(inputPath string, maxSize uint) (string, error) {
 	file, err := os.Open(inputPath)
-	if err != nil {
+	if checkError("Opening file", err) {
 		return "", err
 	}
 	defer file.Close()
 
 	img, _, err := image.Decode(file)
-	if err != nil {
+	if checkError("Decoding image", err) {
 		return "", err
 	}
 
 	resizedImg := resize.Resize(maxSize, 0, img, resize.Lanczos3)
-
 	outputPath := inputPath + "_resized.png"
 	outFile, err := os.Create(outputPath)
-	if err != nil {
+	if checkError("Creating file", err) {
 		return "", err
 	}
 	defer outFile.Close()
 
 	err = png.Encode(outFile, resizedImg)
-	if err != nil {
+	if checkError("Encoding image", err) {
 		return "", err
 	}
 

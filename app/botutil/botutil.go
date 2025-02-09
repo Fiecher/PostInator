@@ -70,36 +70,36 @@ func GetText(update telego.Update) string {
 }
 
 func SendFile(update telego.Update, bot *telego.Bot, file string) bool {
+	defer clearPhotos()
+
 	chatID := update.Message.Chat.ID
 
 	resizedPath, err := draw.ResizeImage(file, 2048)
 	if err != nil {
-		sendError(bot, chatID, "Error resizing image: "+err.Error())
+		sendError(bot, chatID, "Resizing image: "+err.Error())
 	}
 
 	fileInfo, err := os.Stat(resizedPath)
 	if err != nil {
-		sendError(bot, chatID, "Error getting file size: "+err.Error())
+		sendError(bot, chatID, "Getting file size: "+err.Error())
 	}
 
 	fileToSend, err := os.Open(resizedPath)
 	if err != nil {
-		sendError(bot, chatID, "Error opening file: "+err.Error())
+		sendError(bot, chatID, "Opening file: "+err.Error())
 	}
 
 	defer fileToSend.Close()
 
 	if fileInfo.Size() <= 10*1024*1024 {
 		_, err = bot.SendPhoto(&telego.SendPhotoParams{
-			ChatID:  telego.ChatID{ID: chatID},
-			Photo:   telego.InputFile{File: fileToSend},
-			Caption: "Here is your processed image.",
+			ChatID: telego.ChatID{ID: chatID},
+			Photo:  telego.InputFile{File: fileToSend},
 		})
 	} else {
 		_, err = bot.SendDocument(&telego.SendDocumentParams{
 			ChatID:   telego.ChatID{ID: chatID},
 			Document: telego.InputFile{File: fileToSend},
-			Caption:  "Image is too large, sending as document.",
 		})
 	}
 
@@ -128,13 +128,29 @@ func downloadFile(url, filepath string) (*os.File, error) {
 	return out, err
 }
 
+func clearPhotos() {
+	tempDir := "temp"
+	files, err := os.ReadDir(tempDir)
+	if err != nil {
+		fmt.Println("Error! Reading photos directory:", err)
+		return
+	}
+
+	for _, file := range files {
+		err := os.Remove(filepath.Join(tempDir, file.Name()))
+		if err != nil {
+			fmt.Println("Error! Deleting file:", file.Name(), err)
+		}
+	}
+}
+
 func sendError(bot *telego.Bot, chatID int64, message string) {
-	fmt.Println("Error:", message)
+	fmt.Println("Error!", message)
 	_, err := bot.SendMessage(&telego.SendMessageParams{
 		ChatID: telego.ChatID{ID: chatID},
 		Text:   "⚠️ " + message,
 	})
 	if err != nil {
-		fmt.Println("Sending error:", err)
+		fmt.Println("Error! Sending error:", err)
 	}
 }
