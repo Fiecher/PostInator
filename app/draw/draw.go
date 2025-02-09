@@ -7,19 +7,16 @@ import (
 	"image/draw"
 	"image/png"
 	"os"
+	"path/filepath"
 
 	"github.com/fogleman/gg"
 	"github.com/nfnt/resize"
 )
 
-const (
-	bgPath      = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\BG.png"
-	fontPath    = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Buran USSR.ttf"
-	overlayPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\Overlay.png"
-	outputPath  = "temp/output.png"
-)
+var bgPath, fontPath, overlayPath, outputPath string
 
 func main() {
+	loadDirectories()
 	const (
 		imgPath = "C:\\Users\\user\\Dropbox\\Programming\\Go\\PostInator\\resources\\test.jpg"
 		text    = "main.go"
@@ -40,6 +37,7 @@ func main() {
 }
 
 func Render(imgPath, text string) string {
+	loadDirectories()
 	background := openImage(bgPath)
 	if background == nil {
 		fmt.Println("Ошибка загрузки фона")
@@ -54,6 +52,15 @@ func Render(imgPath, text string) string {
 
 	return saveImage(outputPath, destImg)
 
+}
+
+func loadDirectories() {
+	rootDir, _ := os.Getwd()
+	outputPath = filepath.Join(rootDir, "temp", "output.png")
+	rootDir = filepath.Dir(rootDir)
+	bgPath = filepath.Join(rootDir, "resources", "BG.png")
+	fontPath = filepath.Join(rootDir, "resources", "Buran USSR.ttf")
+	overlayPath = filepath.Join(rootDir, "resources", "Overlay.png")
 }
 
 func openImage(path string) image.Image {

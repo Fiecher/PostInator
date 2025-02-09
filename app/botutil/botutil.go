@@ -53,7 +53,7 @@ func DownloadFile(update telego.Update, bot *telego.Bot, token string) *os.File 
 
 	bot.SendMessage(&telego.SendMessageParams{
 		ChatID: telego.ChatID{ID: chatID},
-		Text:   "The file has been successfully downloaded.",
+		Text:   "✅ File has been successfully downloaded!",
 	})
 
 	return out
